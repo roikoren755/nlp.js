@@ -20,14 +20,53 @@
  * OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN CONNECTION
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
+import type { Container } from './container';
 
-class DefaultCompiler {
-  constructor(container) {
-    this.container = container.container || container;
+interface IBaseToken<T extends string> {
+  type: T;
+}
+
+interface IValueToken extends IBaseToken<'comment' | 'call' | 'reference'> {
+  value: string;
+}
+
+type NoArgsToken = 'set' | 'delete' | 'get' | 'inc' | 'dec' | 'eq' | 'neq' | `${'g' | 'l'}${'t' | 'e'}` | 'label' | 'goto' | 'je' | 'jne';
+
+interface INoArgsToken extends IBaseToken<NoArgsToken> {
+  arguments: [];
+}
+type Token = IValueToken | INoArgsToken;
+
+type TokenArray = [Token, ...IValueToken[]];
+
+export interface IContext {
+  cursor: number;
+  labels: Record<string, number>;
+  floating?: boolean;
+}
+
+export interface ICompiler {
+  container: Container;
+  name: string;
+  getTokenFromWord(word: string): Token;
+  compile(pipeline: string[]): TokenArray[];
+  executeCall(firstToken: IValueToken, context: IContext, input, srcObject, depth: number);
+  executeReference(step: IValueToken[], firstToken: IValueToken, context: IContext, input, srcObject);
+  doGoto(label: string, srcContext: IContext);
+  executeAction(step: TokenArray, context: IContext, input, srcObject, depth: number);
+  findLabels(compiled: TokenArray[], srcLabels: Record<string, number>): void;
+  execute(compiled: TokenArray[], srcInput, srcObject, depth: number);
+}
+
+export default class DefaultCompiler implements ICompiler {
+  container: Container;
+  name: 'default';
+  constructor(container: { container: Container } | Container) {
+    this.container = (container as { container: Container }).container || container as Container;
     this.name = 'default';
   }
 
-  getTokenFromWord(word) {
+  getTokenFromWord(word): Token {
     if (word.startsWith('//')) {
       return {
         type: 'comment',
@@ -54,7 +93,7 @@ class DefaultCompiler {
       ].includes(word)
     ) {
       return {
-        type: word,
+        type: word as NoArgsToken,
         arguments: [],
       };
     }
@@ -71,13 +110,13 @@ class DefaultCompiler {
   }
 
   compile(pipeline) {
-    const result = [];
+    const result: TokenArray[] = [];
     for (let i = 0; i < pipeline.length; i += 1) {
       const line = pipeline[i].trim();
       const words = line.split(' ');
-      const tokens = [];
+      const tokens = [] as unknown as TokenArray;
       let currentString = '';
-      let currentQuote;
+      let currentQuote: string | undefined;
       for (let j = 0; j < words.length; j += 1) {
         const word = words[j];
         let processed = false;
@@ -162,12 +201,12 @@ class DefaultCompiler {
 
   async executeAction(step, context, input, srcObject, depth) {
     let firstToken = step[0];
-    if (firstToken && firstToken.value && firstToken.value.startsWith('->')) {
+    if (firstToken && (firstToken as IValueToken).value && (firstToken as IValueToken).value.startsWith('->')) {
       if (depth > 0) {
         return input;
       }
       firstToken = { ...firstToken };
-      firstToken.value = firstToken.value.slice(2);
+      (firstToken as IValueToken).value = (firstToken as IValueToken).value.slice(2);
     }
     switch (firstToken.type) {
       case 'set':
@@ -278,7 +317,7 @@ class DefaultCompiler {
         return this.executeCall(firstToken, context, input, srcObject, depth);
       case 'reference':
         return this.executeReference(
-          step,
+          step as IValueToken[],
           firstToken,
           context,
           input,
@@ -317,5 +356,3 @@ class DefaultCompiler {
     return input;
   }
 }
-
-module.exports = DefaultCompiler;

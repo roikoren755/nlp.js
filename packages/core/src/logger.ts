@@ -21,35 +21,48 @@
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-function readFile() {
-  return new Promise((resolve) => {
-    resolve(undefined);
-  });
+class Logger {
+  name: string;
+  constructor() {
+    this.name = 'logger';
+  }
+
+  debug(...args: any[]) {
+    // eslint-disable-next-line no-console
+    console.debug(...args);
+  }
+
+  info(...args: any[]) {
+    // eslint-disable-next-line no-console
+    console.info(...args);
+  }
+
+  warn(...args: any[]) {
+    // eslint-disable-next-line no-console
+    console.warn(...args);
+  }
+
+  error(...args: any[]) {
+    // eslint-disable-next-line no-console
+    console.error(...args);
+  }
+
+  log(...args: any[]) {
+    // eslint-disable-next-line no-console
+    console.log(...args);
+  }
+
+  trace(...args: any[]) {
+    // eslint-disable-next-line no-console
+    console.trace(...args);
+  }
+
+  fatal(...args: any[]) {
+    // eslint-disable-next-line no-console
+    console.error(...args);
+  }
 }
 
-function writeFile() {
-  return new Promise((resolve, reject) => {
-    reject(new Error('File cannot be written in web'));
-  });
-}
+const logger = new Logger();
 
-function existsSync() {
-  return false;
-}
-
-function lstatSync() {
-  return undefined;
-}
-
-function readFileSync() {
-  return undefined;
-}
-
-module.exports = {
-  readFile,
-  writeFile,
-  existsSync,
-  lstatSync,
-  readFileSync,
-  name: 'fs',
-};
+export default logger;

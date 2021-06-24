@@ -64,14 +64,14 @@ const reHasUnicode = RegExp(
 const reUnicode = RegExp(`${rsFitz}(?=${rsFitz})|${rsSymbol + rsSeq}`, 'g');
 /* eslint-enable no-misleading-character-class */
 
-const hasUnicode = (str) => reHasUnicode.test(str);
-const unicodeToArray = (str) => str.match(reUnicode) || [];
-const asciiToArray = (str) => str.split('');
-const stringToArray = (str) =>
+export const hasUnicode = (str: string): boolean => reHasUnicode.test(str);
+export const unicodeToArray = (str: string): string[] => str.match(reUnicode) || [];
+export const asciiToArray = (str: string): string[] => str.split('');
+export const stringToArray = (str: string): string[] =>
   hasUnicode(str) ? unicodeToArray(str) : asciiToArray(str);
 
-function compareWildcars(text, rule) {
-  const escapeRegex = (str) => str.replace(/([.*+^=!:${}()|[\]/\\])/g, '\\$1');
+export function compareWildcards(text: string, rule: string): boolean {
+  const escapeRegex = (str: string): string => str.replace(/([.*+^=!:${}()|[\]/\\])/g, '\\$1');
   const regexRule = `^${rule.split('*').map(escapeRegex).join('.*')}$`.replace(
     /\?/g,
     '.'
@@ -79,7 +79,7 @@ function compareWildcars(text, rule) {
   return new RegExp(regexRule).test(text);
 }
 
-function loadEnvFromJson(preffix, json = {}) {
+export function loadEnvFromJson(preffix?: string, json = {}): void {
   const keys = Object.keys(json);
   preffix = preffix ? `${preffix}_` : '';
   for (let i = 0; i < keys.length; i += 1) {
@@ -87,12 +87,3 @@ function loadEnvFromJson(preffix, json = {}) {
     process.env[key] = json[keys[i]];
   }
 }
-
-module.exports = {
-  hasUnicode,
-  unicodeToArray,
-  asciiToArray,
-  stringToArray,
-  compareWildcars,
-  loadEnvFromJson,
-};

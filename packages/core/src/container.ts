@@ -21,84 +21,120 @@
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-const { compareWildcars } = require('./helper');
-const DefaultCompiler = require('./default-compiler');
-const logger = require('./logger');
+import { compareWildcards } from './helper';
+import DefaultCompiler from './default-compiler';
+import type { ICompiler, IContext } from './default-compiler';
+import logger from './logger';
+
+interface IBaseItem {
+  applySettings?(args: unknown): void;
+}
+
+interface IFactoryItem<T extends IBaseItem = IBaseItem> {
+  name: string;
+  isSingleton: boolean;
+  instance: T;
+}
+
+interface IBaseClass extends Record<string, unknown> {
+  fromJSON?(obs: Record<string, unknown>): void;
+}
+
+type ClassesType = Record<string, new (...args: any[]) => IBaseClass>;
+type FactoryType = Record<string, IFactoryItem>;
+type PipelinesType = Record<string, never>;
+type ConfigurationsType = Record<string, never>;
+type CompilersType = Record<string, ICompiler>;
+interface ICompilers extends Record<string, ICompiler> {
+  default: DefaultCompiler
+}
+type CacheBestKeysType = Record<string, string | null>;
+type CachePipelinesType = Record<string, never>;
 
 /**
  * Container class
  */
-class Container {
+export class Container<Classes extends ClassesType = ClassesType, Factory extends FactoryType = FactoryType, Pipelines extends PipelinesType = PipelinesType, Configurations extends ConfigurationsType = ConfigurationsType, Compilers extends ICompilers = ICompilers, CacheBestKeys extends CacheBestKeysType = CacheBestKeysType, CachePipelines extends CachePipelinesType = CachePipelinesType> {
+  classes: Classes;
+  factory: Factory;
+  pipelines: Pipelines;
+  configurations: Configurations;
+  compilers: Compilers;
+  cache: {
+    bestKeys: CacheBestKeys;
+    pipelines: CachePipelines;
+  };
+  parent?: Container;
   /**
    * Constructor of the class.
    */
   constructor(hasPreffix = false) {
-    this.classes = {};
-    this.factory = {};
-    this.pipelines = {};
-    this.configurations = {};
-    this.compilers = {};
+    this.classes = {} as Classes;
+    this.factory = {} as Factory;
+    this.pipelines = {} as Pipelines;
+    this.configurations = {} as Configurations;
+    this.compilers = {} as Compilers;
     this.cache = {
-      bestKeys: {},
-      pipelines: {},
+      bestKeys: {} as CacheBestKeys,
+      pipelines: {} as CachePipelines,
     };
-    this.registerCompiler(DefaultCompiler);
+    this.registerCompiler(DefaultCompiler as new (container: Container) => Compilers[keyof Compilers]);
     if (!hasPreffix) {
       this.use(logger);
     }
   }
 
-  registerCompiler(Compiler, name) {
+  registerCompiler<T extends keyof Compilers>(Compiler: new (container: Container) => Compilers[T], name?: T): void {
     const instance = new Compiler(this);
-    this.compilers[name || instance.name] = instance;
+    this.compilers[name || instance.name as T] = instance;
   }
 
-  addClass(clazz, name) {
-    this.classes[name || clazz.name] = clazz;
+  addClass<T extends keyof Classes>(clazz: Classes[T], name?: T): void {
+    this.classes[name || clazz.name as T] = clazz;
   }
 
-  toJSON(instance) {
-    const result = instance.toJSON ? instance.toJSON() : { ...instance };
+  toJSON<T extends Record<string, unknown>, U extends { toJSON?(): T }>(instance: U): Record<string, unknown> {
+    const result = (instance.toJSON ? instance.toJSON() : { ...instance }) as Record<string, unknown>;
     result.className = instance.constructor.name;
     return result;
   }
 
-  fromJSON(obj, settings) {
+  fromJSON<T extends keyof Classes, U extends { className: T }>(obj: U, settings: ConstructorParameters<Classes[T]>): InstanceType<Classes[T]> {
     const Clazz = this.classes[obj.className];
-    let instance;
+    let instance: InstanceType<Classes[T]>;
     if (Clazz) {
-      instance = new Clazz(settings);
+      instance = new Clazz(settings) as InstanceType<Classes[T]>;
       if (instance.fromJSON) {
         instance.fromJSON(obj);
       } else {
         Object.assign(instance, obj);
       }
     } else {
-      instance = { ...obj };
+      instance = { ...obj } as InstanceType<Classes[T]>;
     }
     delete instance.className;
     return instance;
   }
 
-  register(name, Clazz, isSingleton = true) {
-    this.cache.bestKeys = {};
+  register<T extends keyof Factory>(name: T, Clazz: unknown, isSingleton = true): void {
+    this.cache.bestKeys = {} as CacheBestKeys;
     const isClass = typeof Clazz === 'function';
-    const item = { name, isSingleton };
+    const item = { name, isSingleton } as unknown as Factory[T];
     if (isSingleton) {
-      item.instance = isClass ? new Clazz() : Clazz;
+      item.instance = isClass ? new (Clazz as new () => unknown)() : Clazz;
     } else {
       item.instance = isClass ? Clazz : Clazz.constructor;
     }
     this.factory[name] = item;
   }
 
-  getBestKey(name) {
+  getBestKey<T extends keyof CacheBestKeys>(name: T): string | undefined {
     if (this.cache.bestKeys[name] !== undefined) {
       return this.cache.bestKeys[name];
     }
-    const keys = Object.keys(this.factory);
+    const keys = Object.keys(this.factory) as CacheBestKeys[T][];
     for (let i = 0; i < keys.length; i += 1) {
-      if (compareWildcars(name, keys[i])) {
+      if (compareWildcards(name as string, keys[i])) {
         this.cache.bestKeys[name] = keys[i];
         return keys[i];
       }
@@ -107,7 +143,7 @@ class Container {
     return undefined;
   }
 
-  get(name, settings) {
+  get(name: string, settings?: unknown) {
     let item = this.factory[name];
     if (!item) {
       if (this.parent) {
@@ -142,7 +178,7 @@ class Container {
     };
   }
 
-  resolvePathWithType(step, context, input, srcObject) {
+  resolvePathWithType(step: string, context: IContext, input, srcObject) {
     const tokens = step.split('.');
     let token = tokens[0].trim();
     if (!token) {
@@ -174,7 +210,7 @@ class Container {
     if (token === 'false') {
       return this.buildLiteral('boolean', step, false, context);
     }
-    let currentObject = context;
+    let currentObject: unknown = context;
     if (token === 'input' || token === 'output') {
       currentObject = input;
     } else if (token && token !== 'context' && token !== 'this') {
@@ -213,12 +249,12 @@ class Container {
     };
   }
 
-  resolvePath(step, context, input, srcObject) {
+  resolvePath(step: string, context: IContext, input, srcObject) {
     const result = this.resolvePathWithType(step, context, input, srcObject);
     return result ? result.value : result;
   }
 
-  setValue(path, valuePath, context, input, srcObject) {
+  setValue(path: string, valuePath: string, context: IContext, input, srcObject) {
     const value = this.resolvePath(valuePath, context, input, srcObject);
     const tokens = path.split('.');
     const newPath = tokens.slice(0, -1).join('.');
@@ -226,7 +262,7 @@ class Container {
     currentObject[tokens[tokens.length - 1]] = value;
   }
 
-  incValue(path, valuePath, context, input, srcObject) {
+  incValue(path: string, valuePath: string, context: IContext, input, srcObject) {
     const value = this.resolvePath(valuePath, context, input, srcObject);
     const tokens = path.split('.');
     if (path.startsWith('.')) {
@@ -237,7 +273,7 @@ class Container {
     currentObject[tokens[tokens.length - 1]] += value;
   }
 
-  decValue(path, valuePath, context, input, srcObject) {
+  decValue(path: string, valuePath: string, context: IContext, input, srcObject) {
     const value = this.resolvePath(valuePath, context, input, srcObject);
     const tokens = path.split('.');
     const newPath = tokens.slice(0, -1).join('.');
@@ -245,56 +281,56 @@ class Container {
     currentObject[tokens[tokens.length - 1]] -= value;
   }
 
-  eqValue(pathA, pathB, srcContext, input, srcObject) {
+  eqValue(pathA: string, pathB: string, srcContext: IContext, input, srcObject) {
     const context = srcContext;
     const valueA = this.resolvePath(pathA, context, input, srcObject);
     const valueB = this.resolvePath(pathB, context, input, srcObject);
     context.floating = valueA === valueB;
   }
 
-  neqValue(pathA, pathB, srcContext, input, srcObject) {
+  neqValue(pathA: string, pathB: string, srcContext: IContext, input, srcObject) {
     const context = srcContext;
     const valueA = this.resolvePath(pathA, context, input, srcObject);
     const valueB = this.resolvePath(pathB, context, input, srcObject);
     context.floating = valueA !== valueB;
   }
 
-  gtValue(pathA, pathB, srcContext, input, srcObject) {
+  gtValue(pathA: string, pathB: string, srcContext: IContext, input, srcObject) {
     const context = srcContext;
     const valueA = this.resolvePath(pathA, context, input, srcObject);
     const valueB = this.resolvePath(pathB, context, input, srcObject);
     context.floating = valueA > valueB;
   }
 
-  geValue(pathA, pathB, srcContext, input, srcObject) {
+  geValue(pathA: string, pathB: string, srcContext: IContext, input, srcObject) {
     const context = srcContext;
     const valueA = this.resolvePath(pathA, context, input, srcObject);
     const valueB = this.resolvePath(pathB, context, input, srcObject);
     context.floating = valueA >= valueB;
   }
 
-  ltValue(pathA, pathB, srcContext, input, srcObject) {
+  ltValue(pathA: string, pathB: string, srcContext: IContext, input, srcObject) {
     const context = srcContext;
     const valueA = this.resolvePath(pathA, context, input, srcObject);
     const valueB = this.resolvePath(pathB, context, input, srcObject);
     context.floating = valueA < valueB;
   }
 
-  leValue(pathA, pathB, srcContext, input, srcObject) {
+  leValue(pathA: string, pathB: string, srcContext: IContext, input, srcObject) {
     const context = srcContext;
     const valueA = this.resolvePath(pathA, context, input, srcObject);
     const valueB = this.resolvePath(pathB, context, input, srcObject);
     context.floating = valueA <= valueB;
   }
 
-  deleteValue(path, context, input, srcObject) {
+  deleteValue(path: string, context: IContext, input, srcObject) {
     const tokens = path.split('.');
     const newPath = tokens.slice(0, -1).join('.');
     const currentObject = this.resolvePath(newPath, context, input, srcObject);
     delete currentObject[tokens[tokens.length - 1]];
   }
 
-  getValue(srcPath, context, input, srcObject) {
+  getValue(srcPath: string, context: IContext, input, srcObject) {
     const path = srcPath || 'floating';
     const tokens = path.split('.');
     const newPath = tokens.slice(0, -1).join('.');
@@ -329,7 +365,7 @@ class Container {
     );
   }
 
-  use(item, name, isSingleton, onlyIfNotExists = false) {
+  use(item, name?: string, isSingleton?: boolean, onlyIfNotExists = false) {
     let instance;
     if (typeof item === 'function') {
       if (item.name.endsWith('Compiler')) {
@@ -353,7 +389,7 @@ class Container {
     return itemName;
   }
 
-  getCompiler(name) {
+  getCompiler(name: string): ICompiler {
     const compiler = this.compilers[name];
     if (compiler) {
       return compiler;
@@ -364,7 +400,7 @@ class Container {
     return this.compilers.default;
   }
 
-  buildPipeline(srcPipeline, prevPipeline = []) {
+  buildPipeline(srcPipeline: string[], prevPipeline: string[] = []) {
     const pipeline = [];
     if (srcPipeline && srcPipeline.length > 0) {
       for (let i = 0; i < srcPipeline.length; i += 1) {
@@ -394,7 +430,7 @@ class Container {
     };
   }
 
-  registerPipeline(tag, pipeline, overwrite = true) {
+  registerPipeline(tag: string, pipeline: string[], overwrite = true) {
     if (overwrite || !this.pipelines[tag]) {
       this.cache.pipelines = {};
       const prev = this.getPipeline(tag);
@@ -424,7 +460,7 @@ class Container {
     }
     const keys = Object.keys(this.pipelines);
     for (let i = 0; i < keys.length; i += 1) {
-      if (compareWildcars(tag, keys[i])) {
+      if (compareWildcards(tag, keys[i])) {
         this.cache.pipelines[tag] = this.pipelines[keys[i]];
         return this.pipelines[keys[i]];
       }
@@ -445,7 +481,7 @@ class Container {
     }
     const keys = Object.keys(this.configurations);
     for (let i = 0; i < keys.length; i += 1) {
-      if (compareWildcars(tag, keys[i])) {
+      if (compareWildcards(tag, keys[i])) {
         return this.configurations[keys[i]];
       }
     }
@@ -530,9 +566,4 @@ class Container {
   }
 }
 
-const defaultContainer = new Container();
-
-module.exports = {
-  Container,
-  defaultContainer,
-};
+export const defaultContainer = new Container();

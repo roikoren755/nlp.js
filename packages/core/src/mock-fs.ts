@@ -21,18 +21,28 @@
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-/**
- * Class for an Among of a Stemmer
- */
-class Among {
-  constructor(s, sub, result, method, instance) {
-    this.s_size = s.length;
-    this.s = s;
-    this.substring_i = sub;
-    this.result = result;
-    this.method = method;
-    this.instance = instance;
-  }
+export function readFile(): Promise<unknown> {
+  return new Promise((resolve) => {
+    resolve(undefined);
+  });
 }
 
-module.exports = Among;
+export function writeFile(): Promise<unknown> {
+  return new Promise((resolve, reject) => {
+    reject(new Error('File cannot be written in web'));
+  });
+}
+
+export function existsSync(): boolean {
+  return false;
+}
+
+export function lstatSync(): unknown {
+  return undefined;
+}
+
+export function readFileSync(): unknown {
+  return undefined;
+}
+
+export const name = 'fs';

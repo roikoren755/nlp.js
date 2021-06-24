@@ -21,47 +21,22 @@
  * WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.
  */
 
-class Logger {
-  constructor() {
-    this.name = 'logger';
-  }
-
-  debug(...args) {
-    // eslint-disable-next-line no-console
-    console.debug(...args);
-  }
-
-  info(...args) {
-    // eslint-disable-next-line no-console
-    console.info(...args);
-  }
-
-  warn(...args) {
-    // eslint-disable-next-line no-console
-    console.warn(...args);
-  }
-
-  error(...args) {
-    // eslint-disable-next-line no-console
-    console.error(...args);
-  }
-
-  log(...args) {
-    // eslint-disable-next-line no-console
-    console.log(...args);
-  }
-
-  trace(...args) {
-    // eslint-disable-next-line no-console
-    console.trace(...args);
-  }
-
-  fatal(...args) {
-    // eslint-disable-next-line no-console
-    console.error(...args);
+/**
+ * Class for an Among of a Stemmer
+ */
+export default class Among {
+  s_size: number;
+  s: string;
+  substring_i: number;
+  result: number;
+  method: unknown;
+  instance: unknown;
+  constructor(s: string, sub: number, result: number, method, instance) {
+    this.s_size = s.length;
+    this.s = s;
+    this.substring_i = sub;
+    this.result = result;
+    this.method = method;
+    this.instance = instance;
   }
 }
-
-const logger = new Logger();
-
-module.exports = logger;
